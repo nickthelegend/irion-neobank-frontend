@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "test": "node --import tsx --test \"lib/**/*.test.ts\" \"components/**/*.test.tsx\""
+    "test": "node --import tsx --test \"lib/**/*.test.ts\" \"components/**/*.test.tsx\"",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
@@ -17,6 +18,7 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.37",
     "@types/react": "^19",
