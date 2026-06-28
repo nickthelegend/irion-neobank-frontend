@@ -1,49 +1,60 @@
-# Meridian — Irion neobank reference frontend
+# Meridian
 
-**A complete reference neobank built entirely on the [Irion B2B API](../irion-b2b-api).**
+**A reference neobank on the [Irion B2B API](../irion-b2b-api).**
+
+Meridian is part of [**Irion**](../) — private consumer credit and B2B neobank infrastructure on the
+[Canton Network](https://www.canton.network/) (Daml smart contracts). _Buy Now, Pay Never._ Privacy
+by construction: a Daml contract is visible only to its signatory and observer parties, so balances,
+transfers, FX, loans, and payroll are private at the protocol layer — no ZK circuit required.
 
 ---
 
 ## What it is
 
-Meridian is a working neobank that shows integrators how to build a full banking product on top of
-the Irion B2B API — nothing custom on the backend, just the API. Users sign in with a **passkey**
-(WebAuthn — Touch ID / Windows Hello / any FIDO2); the Irion platform custodies their
-operator-allocated Canton party, so the app can move money on their behalf. Every balance, transfer,
-swap, loan and salary settles on the **Canton ledger**.
+Meridian is a complete, fully-working neobank built **entirely on the Irion B2B API** — there is no
+custom backend, no database, and nothing faked in the money path. Every screen is a thin client over
+the API's `/v1/account/*` surface, and every balance, transfer, swap, loan, and salary settles on a
+real **Canton ledger** behind that API.
 
-The sidebar maps one-to-one onto the API's capabilities:
+It exists to show integrators — other businesses and neobanks building on Irion — exactly how to
+consume the platform: how to authenticate with passkeys, how to read a treasury, how to run an FX
+swap, how to draw working capital, and how to pay a team privately. A built-in **Developer drawer**
+makes this concrete by surfacing the actual API calls each screen makes, live, as you click.
 
-| Nav | Backed by |
-|---|---|
-| **Home** | `GET /v1/account/treasury` — multi-currency balances + yield + total |
-| **Send** | `POST /v1/account/transfers` — atomic settlement to any counterparty / payee |
-| **Convert** | `POST /v1/account/treasury/rebalance` — real on-ledger FX swap (USDC/EURC/GBPC) |
-| **Earn** | `POST /v1/account/treasury/sweep` · `/redeem` — idle cash into/out of the yield pool |
-| **Borrow** | `POST /v1/account/credit/underwrite` + `/v1/account/loans` — real on-ledger underwriting + working capital |
-| **Pay team** | `POST /v1/account/payroll/runs` — **private payroll** (each salary its own per-employee contract) |
+In short: if you want to see what an integrator can build on Irion, Meridian _is_ that build.
 
-A built-in **Developer drawer** shows, live, the exact API calls each screen makes — so an integrator
-can see the request/response for every action as they click.
+## Features
 
-## Run
+The sidebar maps one-to-one onto the API's capabilities. Each section is a working product surface
+backed by a real, on-ledger endpoint:
 
-```bash
-npm install
-npm run dev          # http://localhost:3006   (Next.js 16)
-# npm run build && npm start   # build uses --webpack
-```
+| Section          | What it does                                          | Backed by                                                      |
+| ---------------- | ----------------------------------------------------- | ------------------------------------------------------------- |
+| **Home**         | Multi-currency balances, yield, and total            | `GET /v1/account/treasury`                                     |
+| **Send**         | Atomic transfer to any counterparty or payee          | `POST /v1/account/transfers`                                   |
+| **Convert (FX)** | Real on-ledger FX swap across USDC / EURC / GBPC      | `POST /v1/account/treasury/rebalance` · `/rates`              |
+| **Earn**         | Sweep idle cash into the yield pool, or redeem it     | `POST /v1/account/treasury/sweep` · `/redeem`                 |
+| **Borrow**       | On-ledger underwriting + draw / repay working capital | `POST /v1/account/credit/underwrite` · `/v1/account/loans`    |
+| **Pay team**     | Private payroll — each salary is its own contract     | `POST /v1/account/payroll/runs` · `/v1/account/employees`     |
 
-Requires the [Irion B2B API](../irion-b2b-api) running on `:8088` (with a Canton ledger behind it).
-The b2b-api allows `:3006` as a passkey/CORS origin.
+**Developer drawer** — a slide-out panel that shows, live, the exact request and response for every
+action you take in the UI. It turns Meridian into self-documenting reference material: an integrator
+can watch the API behave in real time instead of reading about it.
 
-### Environment (`.env.local`)
+## How passkey auth works
 
-| Var | Purpose |
-|---|---|
-| `NEXT_PUBLIC_B2B_API_URL` | the Irion B2B API it consumes — default `http://localhost:8088` |
+Authentication is **passkeys** (WebAuthn / FIDO2 — Touch ID, Windows Hello, or a hardware security
+key), via [`@simplewebauthn/browser`](https://simplewebauthn.dev/). There are no passwords, and there
+is no spoofable client-supplied identity header. The flow:
 
-## How it fits the system
+1. **Register / sign in** — the browser calls `/v1/auth/register/begin` (or `/login/begin`) to get a
+   WebAuthn challenge, prompts the device authenticator, and posts the signed attestation/assertion
+   back to `/finish`.
+2. **Session** — the b2b-api verifies the passkey, allocates (or looks up) an **operator-custodied
+   Canton party** for the account, and returns an **HMAC session token**.
+3. **Authorized calls** — that token is sent as `Authorization: Bearer <session>` on every
+   subsequent `/v1/account/*` request. The platform custodies the account's party, so automated
+   treasury and payroll actions can be signed unattended.
 
 ```
 Meridian (passkey login)
@@ -52,15 +63,81 @@ Meridian (passkey login)
 irion-b2b-api :8088  ──►  Canton JSON Ledger API v2  ──►  Irion Daml protocol
 ```
 
-Meridian is a pure client of `/v1/account/*` — the same passkey-authed surface the merchant
-`/dashboard` console uses. It's the consumer-grade reference next to that operator console.
+This replaces the old, spoofable `x-wallet-address` header: identity is now proven by a passkey
+signature and carried by a signed session token. Meridian is a pure client of `/v1/account/*` — the
+same passkey-authed surface the merchant `/dashboard` console (in
+[`irion-merchant-app-canton`](../irion-merchant-app-canton)) consumes. The two are sibling reference
+clients on one API.
 
-## Layout
+## Getting started
 
-| Path | What |
-|---|---|
-| `components/Dashboard.tsx` | the app shell + per-view screens |
-| `components/Sidebar.tsx` | Home / Send / Convert / Earn / Borrow / Pay team |
-| `components/DevDrawer.tsx` | live "here are the API calls" developer panel |
-| `components/neobank/Login.tsx`, `auth.tsx` | passkey register/login (`@simplewebauthn/browser`) |
-| `lib/neobank.ts` | typed client for the b2b-api |
+**Prerequisite:** the [Irion B2B API](../irion-b2b-api) must be running on **`:8088`** with a Canton
+ledger behind it, and it must allow `:3006` as a passkey relying-party origin (add it to the API's
+`IRION_RP_ORIGIN`). Passkeys are origin-bound — without `:3006` in that allowlist the browser will
+reject the WebAuthn ceremony.
+
+```bash
+npm install
+npm run dev -- -p 3006      # http://localhost:3006   (Next.js 16)
+```
+
+Then open <http://localhost:3006/app> and create an account with your device passkey.
+
+### Environment (`.env.local`)
+
+| Variable                  | Purpose                                                       | Default                 |
+| ------------------------- | ------------------------------------------------------------ | ----------------------- |
+| `NEXT_PUBLIC_B2B_API_URL` | Base URL of the Irion B2B API that Meridian consumes         | `http://localhost:8088` |
+
+### Production build
+
+```bash
+npm run build               # uses --webpack
+npm start
+```
+
+## Testing
+
+```bash
+npm test                    # node:test (tsx) — API-client contract + UI render tests
+npm run e2e                 # Playwright — real passkey signing E2E (virtual WebAuthn authenticator)
+```
+
+- **`npm test`** runs Node's built-in test runner (via `tsx`, no extra runtime deps) over
+  `lib/**/*.test.ts` and `components/**/*.test.tsx`. It covers the `lib/neobank.ts` API-client
+  contract (request shapes, headers, the `Bearer` session) and component render output (real
+  server-side rendering via `react-dom/server`, no jsdom or browser needed).
+- **`npm run e2e`** runs a Playwright end-to-end test that drives the **real passkey flow** using a
+  Chrome DevTools **virtual WebAuthn authenticator** — no hardware required. It registers a fresh
+  account on a running b2b-api, asserts that `/v1/auth/register/finish` returns `201`, and verifies
+  the response carries a valid **HMAC session token** and a real **Canton party**. This proves the
+  click → passkey-sign → server → ledger path against the live stack, so the e2e requires the b2b-api
+  up on `:8088`.
+
+## Project layout
+
+```
+app/
+  app/                       Next.js route — the /app entry (renders Login when unauthenticated)
+  layout.tsx, globals.css    app shell + brand styling (lime-green #a6f24a on near-black)
+components/
+  Dashboard.tsx              app shell + per-view screens (Home / Send / Convert / Earn / Borrow / Pay team)
+  Sidebar.tsx                navigation
+  DevDrawer.tsx              live "here are the API calls" developer panel
+  neobank/
+    Login.tsx                passkey register / sign-in UI (@simplewebauthn/browser)
+    auth.tsx                 session/auth context
+    ui.tsx                   shared UI primitives  (+ ui.test.tsx render tests)
+lib/
+  neobank.ts                 typed client for the b2b-api  (+ neobank.test.ts contract tests)
+tests/
+  e2e/passkey.spec.ts        Playwright virtual-authenticator passkey signing E2E
+```
+
+## Related repositories
+
+| Repo                                                       | Role                                                                          |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`irion-b2b-api`](../irion-b2b-api)                        | Meridian's only backend — the REST API over the Canton ledger (`:8088`)       |
+| [`irion-merchant-app-canton`](../irion-merchant-app-canton)| The merchant / operator console — the other reference client on the same API  |
+| [`irion-contracts-canton`](../irion-contracts-canton)      | The Daml protocol (Token, Pool, Bnpl, Credit, Config) the API settles against |
